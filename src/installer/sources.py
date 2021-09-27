@@ -11,6 +11,7 @@ from installer._compat.typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
     from typing import BinaryIO, Iterator, List, Tuple
+    from zipfile import ZipInfo
 
     from installer._compat.typing import FSPath, Text
 
@@ -131,6 +132,20 @@ class WheelFile(WheelSource):
         with zipfile.ZipFile(path) as f:
             yield cls(f)
 
+    def namelist(self):
+        # type: () -> List[FSPath]
+        """Get names of all files in zip."""
+        return filter(lambda f: f[-1:] != '/', self._zipfile.namelist())
+
+    def infolist(self):
+        # type: () -> List[ZipInfo]
+        """Get information for all files in zip."""
+        return filter(lambda f: f.filename[-1:] != '/', self._zipfile.infolist())
+
+    def read(self, path, pwd = None):
+        # type: (FSPath, bytes) -> bytes
+        return self._zipfile.read(path, pwd)
+
     @property
     def dist_info_filenames(self):
         # type: () -> List[FSPath]
@@ -138,8 +153,7 @@ class WheelFile(WheelSource):
         base = self.dist_info_dir
         return [
             name[len(base) + 1 :]
-            for name in self._zipfile.namelist()
-            if name[-1:] != "/"
+            for name in self.namelist()
             if base == posixpath.commonprefix([name, base])
         ]
 
@@ -147,7 +161,7 @@ class WheelFile(WheelSource):
         # type: (FSPath) -> Text
         """Get contents, from ``filename`` in the dist-info directory."""
         path = posixpath.join(self.dist_info_dir, filename)
-        return self._zipfile.read(path).decode("utf-8")
+        return self.read(path).decode("utf-8")
 
     def get_contents(self):
         # type: () -> Iterator[WheelContentElement]
@@ -162,10 +176,7 @@ class WheelFile(WheelSource):
         records = installer.records.parse_record_file(record_lines)
         record_mapping = {record[0]: record for record in records}
 
-        for item in self._zipfile.infolist():
-            if item.filename[-1:] == "/":  # looks like a directory
-                continue
-
+        for item in self.infolist():
             record = record_mapping.pop(item.filename, None)
             assert record is not None, "In {}, {} is not mentioned in RECORD".format(
                 self._zipfile.filename,

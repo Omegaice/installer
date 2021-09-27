@@ -118,6 +118,24 @@ class TestWheelFile:
             with WheelFile.open(str(path)):
                 pass
 
+    def test_file_list_contains_no_directories(self, fancy_wheel):
+        with WheelFile.open(fancy_wheel) as source:
+            for file in source.namelist():
+                assert file[-1:] != "/"
+
+    def test_info_list_contains_no_directories(self, fancy_wheel):
+        with WheelFile.open(fancy_wheel) as source:
+            for file in source.infolist():
+                assert file.filename[-1:] != "/"
+
+    def test_passthrough_read(self, fancy_wheel):
+        expected_contents = ""
+        with zipfile.ZipFile(fancy_wheel) as archive:
+            expected_contents = archive.read("fancy-1.0.0.dist-info/RECORD")
+
+        with WheelFile.open(fancy_wheel) as source:
+            assert source.read("fancy-1.0.0.dist-info/RECORD") == expected_contents
+
     def test_provides_correct_dist_info_filenames(self, fancy_wheel):
         with WheelFile.open(fancy_wheel) as source:
             assert sorted(source.dist_info_filenames) == [
@@ -130,7 +148,7 @@ class TestWheelFile:
 
     def test_correctly_reads_from_dist_info_files(self, fancy_wheel):
         files = {}
-        with zipfile.ZipFile(fancy_wheel) as archive:
+        with WheelFile.open(fancy_wheel) as archive:
             for file in archive.namelist():
                 if ".dist-info" not in file:
                     continue
@@ -146,10 +164,8 @@ class TestWheelFile:
     def test_provides_correct_contents(self, fancy_wheel):
         # Know the contents of the wheel
         files = {}
-        with zipfile.ZipFile(fancy_wheel) as archive:
+        with WheelFile.open(fancy_wheel) as archive:
             for file in archive.namelist():
-                if file[-1:] == "/":
-                    continue
                 files[file] = archive.read(file)
 
         expected_record_lines = (
